@@ -1,152 +1,81 @@
-"""Analytics router - dashboards and reporting."""
+"""Analytics — pipeline health, quality and coverage KPIs for the dashboard."""
 
-from typing import Any, Optional
-
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter
+from sqlalchemy import func, select
 
 from app.database import get_db
-from app.services.product_service import ProductService
+from app.models.catalog import CatalogItem, PipelineRun, ValidationItem
+from app.services.enrichment_ai import service as ai_service
 
-router = APIRouter()
-
-
-def _str_status(s: Any) -> str:
-    if hasattr(s, "value"):
-        return str(s.value)
-    return str(s) if s is not None else ""
+router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
-@router.get(
-    "/dashboard",
-    summary="Main analytics dashboard",
-)
-async def analytics_dashboard(db: AsyncSession = Depends(get_db)):
-    """Get comprehensive analytics for the product intelligence dashboard."""
-    service = ProductService(db)
+async def _dashboard_payload() -> dict:
+    async for db in get_db():
+        items_total = await db.execute(select(func.count()).select_from(CatalogItem))
+        total = items_total.scalar_one()
 
-    stats = await service.get_stats()
-
-    # Add enrichment stats
-    from sqlalchemy import func, select
-    from app.models.enrichment import EnrichmentRun
-    from app.models.document import ProcessingStatus, SourceDocument
-    from app.models.enrichment import ProductValidation, ValidationStatus
-
-    # Document processing stats
-    doc_stats = await db.execute(
-        select(
-            SourceDocument.status,
-            func.count(SourceDocument.id),
-        ).group_by(SourceDocument.status)
-    )
-    doc_status_counts = {_str_status(s): c for s, c in doc_stats.all()}
-
-    # Enrichment stats
-    enrich_stats = await db.execute(
-        select(
-            EnrichmentRun.status,
-            func.count(EnrichmentRun.id),
-        ).group_by(EnrichmentRun.status)
-    )
-    enrich_status_counts = {_str_status(s): c for s, c in enrich_stats.all()}
-
-    # Validation queue stats
-    val_stats = await db.execute(
-        select(
-            ProductValidation.status,
-            func.count(ProductValidation.id),
-        ).group_by(ProductValidation.status)
-    )
-    val_status_counts = {_str_status(s): c for s, c in val_stats.all()}
-
-    return {
-        "products": stats,
-        "documents": {
-            "status_breakdown": doc_status_counts,
-            "total": sum(doc_status_counts.values()),
-        },
-        "enrichment": {
-            "status_breakdown": enrich_status_counts,
-            "total_jobs": sum(enrich_status_counts.values()),
-        },
-        "validation": {
-            "status_breakdown": val_status_counts,
-            "pending_reviews": val_status_counts.get("pending", 0),
-        },
-    }
-
-
-@router.get(
-    "/quality-trend",
-    summary="Product quality score trends over time",
-)
-async def quality_trend(
-    db: AsyncSession = Depends(get_db),
-    days: int = Query(30, ge=1, le=365),
-):
-    """Get average quality scores aggregated by day."""
-    from sqlalchemy import func, select
-    from app.models.product import Product
-    from datetime import datetime, timedelta
-
-    cutoff = datetime.utcnow() - timedelta(days=days)
-
-    result = await db.execute(
-        select(
-            func.date(Product.created_at).label("date"),
-            func.avg(Product.quality_score).label("avg_quality"),
-            func.count(Product.id).label("count"),
+        status_rows = await db.execute(
+            select(CatalogItem.status, func.count()).group_by(CatalogItem.status)
         )
-        .where(Product.created_at >= cutoff)
-        .group_by(func.date(Product.created_at))
-        .order_by(func.date(Product.created_at))
-    )
+        by_status = dict(status_rows.all())
 
-    rows = result.all()
-    return {
-        "days": days,
-        "data": [
-            {
-                "date": str(r.date),
-                "avg_quality": round(r.avg_quality or 0, 2),
-                "product_count": r.count,
-            }
-            for r in rows
-        ],
-    }
-
-
-@router.get(
-    "/category-distribution",
-    summary="Product distribution by category",
-)
-async def category_distribution(db: AsyncSession = Depends(get_db)):
-    """Get product counts and avg quality per category."""
-    from sqlalchemy import func, select
-    from app.models.product import Product
-
-    result = await db.execute(
-        select(
-            Product.category,
-            func.count(Product.id).label("count"),
-            func.avg(Product.quality_score).label("avg_quality"),
-            func.avg(Product.completeness_score).label("avg_completeness"),
+        avg_conf = await db.execute(
+            select(func.avg(CatalogItem.ai_confidence)).where(CatalogItem.ai_confidence > 0)
         )
-        .where(Product.category.isnot(None))
-        .group_by(Product.category)
-        .order_by(func.count(Product.id).desc())
-    )
+        avg_quality = await db.execute(
+            select(func.avg(CatalogItem.quality_score)).where(CatalogItem.quality_score > 0)
+        )
+        needs_review = await db.execute(
+            select(func.count()).select_from(CatalogItem).where(CatalogItem.needs_review)
+        )
 
-    rows = result.all()
-    return {
-        "categories": [
-            {
-                "category": r.category,
-                "count": r.count,
-                "avg_quality": round(r.avg_quality or 0, 2),
-                "avg_completeness": round(r.avg_completeness or 0, 2),
-            }
-            for r in rows
-        ],
-    }
+        cat_rows = await db.execute(
+            select(CatalogItem.dept, func.count())
+            .where(CatalogItem.dept.is_not(None), CatalogItem.dept != "")
+            .group_by(CatalogItem.dept)
+            .order_by(func.count().desc())
+            .limit(8)
+        )
+        top_categories = [{"name": n or "Unclassified", "count": c} for n, c in cat_rows.all()]
+
+        brand_rows = await db.execute(
+            select(CatalogItem.brand_name, func.count())
+            .where(CatalogItem.brand_name.is_not(None), CatalogItem.brand_name != "")
+            .group_by(CatalogItem.brand_name)
+            .order_by(func.count().desc())
+            .limit(8)
+        )
+        top_brands = [{"name": n, "count": c} for n, c in brand_rows.all()]
+
+        val_pending = await db.execute(
+            select(func.count()).select_from(ValidationItem)
+            .where(ValidationItem.status == "pending")
+        )
+        runs_total = await db.execute(select(func.count()).select_from(PipelineRun))
+
+        # Real engine mode — verified by actual call results, not just key presence
+        if ai_service.last_status == "live":
+            ai_mode = "live"
+        elif ai_service.last_status == "fallback":
+            ai_mode = "fallback"
+        else:
+            ai_mode = "ready" if ai_service.is_available else "offline"
+
+        return {
+            "items_total": total,
+            "by_status": by_status,
+            "avg_ai_confidence": round(avg_conf.scalar_one() or 0, 3),
+            "avg_quality_score": round(avg_quality.scalar_one() or 0, 1),
+            "needs_review_count": needs_review.scalar_one(),
+            "pending_validations": val_pending.scalar_one(),
+            "runs_total": runs_total.scalar_one(),
+            "ai_mode": ai_mode,
+            "top_categories": top_categories,
+            "top_brands": top_brands,
+        }
+
+
+@router.get("")
+async def dashboard():
+    return await _dashboard_payload()

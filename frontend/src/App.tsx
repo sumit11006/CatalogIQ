@@ -1,31 +1,47 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import Layout from './components/Layout'
-import Dashboard from './components/Dashboard'
-import ProductTable from './components/ProductTable'
-import DocumentUploader from './components/DocumentUploader'
-import SearchBar from './components/SearchBar'
-import EnrichmentPanel from './components/EnrichmentPanel'
-import ValidationQueue from './components/ValidationQueue'
-import KnowledgeGraph from './components/KnowledgeGraph'
-import BrahMosChat from './components/BrahMosChat'
-import BrahMosFloatingChat from './components/BrahMosFloatingChat'
+import CatalogPage from './pages/CatalogPage'
+import DashboardPage from './pages/DashboardPage'
+import ExportPage from './pages/ExportPage'
+import RunsPage from './pages/RunsPage'
+import ValidationPage from './pages/ValidationPage'
 
-export default function App() {
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: 1, staleTime: 5000 },
+  },
+})
+
+function AnimatedRoutes() {
+  const location = useLocation()
   return (
-    <Layout>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/products" element={<ProductTable />} />
-        <Route path="/documents" element={<DocumentUploader />} />
-        <Route path="/validation" element={<ValidationQueue />} />
-        <Route path="/search" element={<SearchBar />} />
-        <Route path="/enrichment" element={<EnrichmentPanel />} />
-        <Route path="/graph" element={<KnowledgeGraph />} />
-        <Route path="/chat" element={<BrahMosChat />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+    <motion.div
+      key={location.pathname}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: [0.21, 0.47, 0.32, 0.98] }}
+    >
+      <Routes location={location}>
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/runs" element={<RunsPage />} />
+        <Route path="/catalog" element={<CatalogPage />} />
+        <Route path="/validation" element={<ValidationPage />} />
+        <Route path="/export" element={<ExportPage />} />
       </Routes>
-      <BrahMosFloatingChat />
-    </Layout>
+    </motion.div>
   )
 }
 
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Layout>
+          <AnimatedRoutes />
+        </Layout>
+      </BrowserRouter>
+    </QueryClientProvider>
+  )
+}

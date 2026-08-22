@@ -1,0 +1,19 @@
+# Keeps the free Render backend awake by pinging /health every 10 minutes.
+# Render free tier sleeps after 15 min idle — this prevents cold starts on demo day.
+
+name: Keep backend warm
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {} # allow manual trigger
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: |
+          curl -sf --max-time 60 "${{ secrets.BACKEND_URL }}/health" \
+            && echo "Backend is warm" \
+            || echo "Ping failed (backend may be deploying)"

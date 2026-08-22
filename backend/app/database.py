@@ -43,9 +43,7 @@ Base = declarative_base()
 async def init_db() -> None:
     """Create all tables based on ORM models."""
     # Import models so they register with Base.metadata
-    import app.models.product  # noqa: F401
-    import app.models.document  # noqa: F401
-    import app.models.enrichment  # noqa: F401
+    import app.models.catalog  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
