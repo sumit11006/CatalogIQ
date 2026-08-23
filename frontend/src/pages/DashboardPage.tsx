@@ -1,4 +1,4 @@
-﻿import { Link } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Bar,
@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { ArrowRight, Bot, BotOff, Database, PlayCircle, ShieldCheck, Sparkles, Star } from 'lucide-react'
+import { ArrowRight, Bot, BotOff, Database, Loader2, PlayCircle, ShieldCheck, Sparkles, Star } from 'lucide-react'
 import { Card, EmptyState, StatCard } from '../components/ui'
 import { CountUp, FadeIn, Stagger, StaggerItem } from '../components/motion'
 import { useDashboard, useRuns } from '../hooks/useCatalog'
@@ -26,10 +26,19 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 export default function DashboardPage() {
-  const { data } = useDashboard()
+  const { data, isLoading } = useDashboard()
   const { data: runs } = useRuns()
 
-  if (!data) return null
+  if (isLoading || !data) {
+    return (
+      <div className="flex h-72 items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-silver-600">
+          <Loader2 className="h-8 w-8 animate-spin text-rosegold-500" />
+          <p className="text-sm">Loading intelligence metrics...</p>
+        </div>
+      </div>
+    )
+  }
 
   const statusData = Object.entries(data.by_status).map(([name, value]) => ({
     name: name.replace('_', ' '),
