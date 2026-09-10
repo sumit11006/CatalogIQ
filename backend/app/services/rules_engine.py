@@ -94,8 +94,7 @@ def normalise_entity_case(name: str) -> str:
             out.append(token)
         elif low in _ENTITY_SUFFIXES:
             suffix = _ENTITY_SUFFIXES[low]
-            # preserve trailing punctuation of original token
-            trail = token[len(token.rstrip(".,") + suffix.lower()):] if False else ""
+            trail = token[len(token.rstrip(".,")):]
             out.append(suffix + ("." if token.endswith(".") and not suffix.endswith(".") else "") + trail)
         else:
             out.append(token.capitalize())
@@ -197,7 +196,8 @@ UOM_APPROVED: dict[str, set[str]] = {
     "pr": {"pr", "pair", "pairs"},
     "cfm": {"cfm"},
     "lm": {"lm", "lumen", "lumens"},
-    "k": {"k", "kelvin"},  # color temperature, kept as e.g. 2700 K
+    "K": {"k", "kelvin", "K"},  # color temperature, kept as e.g. 2700 K
+    "k": {"k", "kelvin", "K"},
 }
 _UOM_LOOKUP = {
     alias.strip().lower(): canonical
@@ -232,7 +232,7 @@ def normalise_uom_text(text: str) -> tuple[str, list[str]]:
         applied.append(canon)
         if canon == "in":
             return f"{_fractional_inch_str(num)} in"
-        if canon == "k":
+        if canon.upper() == "K":
             return f"{num} K"
         return f"{num} {canon}"
 
@@ -246,18 +246,24 @@ def normalise_uom_text(text: str) -> tuple[str, list[str]]:
 def decimal_to_fraction(value: float, max_denominator: int = 64) -> str | None:
     """0.25 -> '1/4'; 50.25 -> '50-1/4'; 1.0 -> '1'. None when not clean."""
     try:
-        whole = int(round(value // 1))
-        remainder = abs(value - whole)
+        val_float = float(value)
+        if val_float.is_integer():
+            return str(int(val_float))
+        whole = int(val_float)
+        remainder = abs(val_float - whole)
     except (ValueError, TypeError, OverflowError):
         return None
     frac = Fraction(remainder).limit_denominator(max_denominator)
-    if frac.denominator > max_denominator or frac.numerator == 0:
-        return str(int(value)) if float(value).is_integer() else None
+    if frac.denominator > max_denominator:
+        return None
     if frac.numerator == 0:
         return str(whole)
+    if frac.numerator == frac.denominator:
+        return str(whole + (1 if val_float >= 0 else -1))
     if whole == 0:
-        return f"{frac.numerator}/{frac.denominator}"
-    sign = "-" if value < 0 else ""
+        sign = "-" if val_float < 0 else ""
+        return f"{sign}{frac.numerator}/{frac.denominator}"
+    sign = "-" if val_float < 0 else ""
     return f"{sign}{abs(whole)}-{frac.numerator}/{frac.denominator}"
 
 
