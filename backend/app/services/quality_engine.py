@@ -4,11 +4,26 @@ import re
 
 from app.services.rules_engine import (
     CHAR_LIMITS,
+    PLACEHOLDERS,
     UOM_APPROVED,
     is_placeholder,
 )
 
-APPROVED_UOMS = set(UOM_APPROVED.keys())
+APPROVED_UOMS = set(UOM_APPROVED.keys()) | {k.upper() for k in UOM_APPROVED.keys()} | {"K", "k"}
+
+CHECK_TO_FIELD_MAP = {
+    "TITLE": "product_name",
+    "TITLE_LEN": "product_name",
+    "INVOICE": "invoice_desc",
+    "INV_LIMIT": "invoice_desc",
+    "INV_CAPS": "invoice_desc",
+    "MOBILE_RANGE": "mobile_desc",
+    "LONG": "long_desc",
+    "ATTR_COUNT": "attributes",
+    "UOM": "attributes",
+    "CLASSPATH": "classpath",
+    "NO_PLACEHOLDER": "product_name",
+}
 
 
 def check_quality(item_fields: dict) -> dict:
@@ -38,9 +53,10 @@ def check_quality(item_fields: dict) -> dict:
     add("ATTR_COUNT", "At least 3 attributes", isinstance(attrs, list) and len(attrs) >= 3, f"{len(attrs)}")
 
     bad_uom = []
+    canon_uoms_lower = {u.lower() for u in APPROVED_UOMS}
     for a in attrs:
         uom = (a.get("uom") or "").strip()
-        if uom and uom not in APPROVED_UOMS:
+        if uom and uom not in APPROVED_UOMS and uom.lower() not in canon_uoms_lower:
             bad_uom.append(uom)
     add("UOM", "All units use approved abbreviations", not bad_uom, ", ".join(sorted(set(bad_uom))[:4]))
 
@@ -54,7 +70,7 @@ def check_quality(item_fields: dict) -> dict:
             "marketing_description", "retail_desc",
         )
     ).lower()
-    has_placeholder = "-- unbranded --" in text_blob or "-- no dib brand --" in text_blob
+    has_placeholder = any(p in text_blob for p in ("-- unbranded --", "-- no unilog brand --", "-- no dib brand --", "n/a"))
     add("NO_PLACEHOLDER", "No placeholder values leaked into output", not has_placeholder)
 
     passed = sum(1 for c in checks if c["passed"])
@@ -75,7 +91,8 @@ def needs_human_review(ai_result: dict, quality: dict) -> tuple[bool, list[str]]
         "TITLE", "INVOICE", "LONG", "ATTR_COUNT", "CLASSPATH"}]
     if critical_failed:
         review = True
-        flags.update(critical_failed)
+        for cid in critical_failed:
+            flags.add(CHECK_TO_FIELD_MAP.get(cid, cid))
     return review, sorted(flags)
 
 
