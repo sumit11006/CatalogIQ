@@ -33,10 +33,10 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 MODEL_CASCADE = [
-    "gemini-flash-lite-latest",
-    "gemini-3.6-flash",
-    "gemini-3.1-flash-lite",
-    "gemini-flash-latest",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-2.0-flash-lite",
 ]
 
 SYSTEM_PROMPT = """You are CatalogIQ Enrichment Agent for industrial/consumer product catalogs.
@@ -141,6 +141,7 @@ class GeminiEnrichmentService:
                         "mfg_part_num": r.get("mfg_part_num", ""),
                         "part_desc": r.get("part_desc", ""),
                         "e1_brand": "" if r.get("e1_brand") in ("-- Unbranded --", "-") else r.get("e1_brand", ""),
+                        "unilog_brand": "" if r.get("unilog_brand") in ("-- No Unilog Brand --", "-- Unbranded --", "-") else r.get("unilog_brand", ""),
                         "dib_brand": "" if r.get("dib_brand") in ("-- No DIB Brand --", "-") else r.get("dib_brand", ""),
                         "part_manuf": r.get("part_manuf", ""),
                     }
@@ -224,7 +225,7 @@ def fallback_enrich_row(row: dict) -> dict:
     manuf_raw, _code = parse_manufacturer(row.get("part_manuf", ""))
     dib = row.get("dib_brand", "")
     brand = ""
-    for cand in (row.get("e1_brand"), dib):
+    for cand in (row.get("e1_brand"), row.get("unilog_brand"), dib):
         cand = cand or ""
         if cand and "--" not in cand:
             brand = cand
