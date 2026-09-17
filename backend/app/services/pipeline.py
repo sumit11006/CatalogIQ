@@ -6,6 +6,7 @@ provenance capture), scores quality, and creates HITL validation entries.
 """
 
 import asyncio
+import json
 import time
 from typing import Any
 
@@ -58,8 +59,10 @@ def postprocess_row(item: CatalogItem, ai: dict) -> dict:
     manuf_rule, manuf_code = parse_manufacturer(item.part_manuf_raw)
     manufacturer = ai.get("manufacturer_name") or normalise_entity_case(manuf_rule)
     brand = _clean_brand(ai.get("brand_name")) or _clean_brand(item.e1_brand_raw) \
-        or _clean_brand(item.dib_brand_raw)
+        or _clean_brand(item.unilog_brand_raw) or _clean_brand(item.dib_brand_raw)
     trade = _clean_brand(ai.get("trade_name"))
+    if manuf_code:
+        prov["manufacturer_code"] = {"value": manuf_code, "source": "input"}
 
     fields = {
         "manufacturer_name": mark("manufacturer_name", manufacturer, "ai" if ai.get("manufacturer_name") else "rule"),
@@ -171,20 +174,23 @@ async def _process_batch(run_id: str, batch: list[CatalogItem]) -> None:
 
                 # HITL entries for flagged fields
                 if merged["review_flags"] and result:
-                    for flag in merged["review_flags"][:6]:
+                    for flag in merged["review_flags"][:8]:
                         group = FIELD_GROUP_MAP.get(flag, "descriptions")
                         proposed = merged["fields"].get(flag)
-                        if proposed in (None, "", []) or (
-                            isinstance(proposed, list) and not any(proposed)
-                        ):
-                            continue
+                        if isinstance(proposed, list):
+                            proposed_str = json.dumps(proposed, ensure_ascii=False) if proposed else "[]"
+                        elif proposed is None or proposed == "":
+                            proposed_str = "(empty / requires attention)"
+                        else:
+                            proposed_str = str(proposed)
+
                         db.add(ValidationItem(
                             item_id=item.id,
                             run_id=run_id,
                             field_group=group,
                             field_name=flag,
                             current_value=None,
-                            proposed_value=str(proposed)[:4000],
+                            proposed_value=proposed_str[:4000],
                             reason=(result.get("reasoning") or "")[:1500],
                             ai_confidence=merged["ai_confidence"],
                         ))
