@@ -20,7 +20,11 @@ _FIELD_TO_COLUMN = {
     "manufacturer_name": "manufacturer_name",
     "product_name": "product_name", "short_desc": "short_desc",
     "invoice_desc": "invoice_desc", "mobile_desc": "mobile_desc",
-    "long_desc": "long_desc", "marketing_description": "marketing_description",
+    "long_desc": "long_desc", "retail_desc": "retail_desc",
+    "marketing_description": "marketing_description",
+    "applications": "applications", "includes": "includes",
+    "standards_approvals": "standards_approvals",
+    "features": "features", "attributes": "attributes",
 }
 
 
@@ -112,7 +116,15 @@ async def action(validation_id: str, body: dict):
             column = _FIELD_TO_COLUMN.get(v.field_name)
             item = await db.get(CatalogItem, v.item_id)
             if item and column:
-                setattr(item, column, v.proposed_value)
+                if column in ("features", "attributes"):
+                    try:
+                        val = json.loads(v.proposed_value)
+                    except Exception:
+                        val = v.proposed_value
+                    setattr(item, column, val)
+                else:
+                    setattr(item, column, v.proposed_value)
+
                 prov = dict(item.provenance or {})
                 prov[v.field_name] = {
                     "source": "human",
@@ -121,9 +133,10 @@ async def action(validation_id: str, body: dict):
                     **({"reviewer_note": note} if note else {}),
                 }
                 item.provenance = prov
-                item.needs_review = False
+                await db.flush()
+
                 if item.status == "needs_review":
-                    # stay enriched once all flags resolved; simple heuristic here
+                    # Check remaining pending validations for this item
                     remaining = await db.execute(
                         select(func.count()).select_from(ValidationItem)
                         .where(
@@ -133,5 +146,9 @@ async def action(validation_id: str, body: dict):
                     )
                     if remaining.scalar_one() == 0:
                         item.status = "enriched"
+                        item.needs_review = False
+        else:
+            await db.flush()
+
         await db.commit()
         return {"id": v.id, "status": v.status}
