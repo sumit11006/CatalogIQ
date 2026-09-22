@@ -2,15 +2,17 @@
 
 import csv
 import io
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Query, UploadFile
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import desc, func, or_, select, update
 
 from app.database import get_db
-from app.models.catalog import CatalogItem, PipelineRun
+from app.models.catalog import CatalogItem, PipelineRun, ValidationItem, utcnow
 from app.services.pipeline import run_pipeline
+from app.services.quality_engine import check_quality
 from app.services.rules_engine import is_placeholder
 from app.utils.logger import get_logger
 
@@ -237,6 +239,26 @@ async def edit_item(item_id: str, body: dict):
                 "method": "manual editor override",
             }
         item.provenance = prov
+        # Re-evaluate quality checks on edited item
+        item_fields = {
+            "product_name": item.product_name,
+            "invoice_desc": item.invoice_desc,
+            "mobile_desc": item.mobile_desc,
+            "long_desc": item.long_desc,
+            "short_desc": item.short_desc,
+            "retail_desc": item.retail_desc,
+            "marketing_description": item.marketing_description,
+            "attributes": item.attributes or [],
+            "classpath": item.classpath,
+        }
+        quality = check_quality(item_fields)
+        item.quality_score = quality["score"]
+        item.quality_checks = {
+            "score": quality["score"],
+            "checks": quality["checks"],
+            "flags": (item.quality_checks or {}).get("flags", []),
+        }
+
         if item.needs_review and item.status == "needs_review":
             item.status = "enriched"
             item.needs_review = False
@@ -246,7 +268,7 @@ async def edit_item(item_id: str, body: dict):
 
 @items_router.post("/{item_id}/accept")
 async def accept_item(item_id: str, body: dict = None):
-    """Human accepts the current record as-is — clears review state."""
+    """Human accepts the current record as-is — clears review state and resolves queue items."""
     async for db in get_db():
         item = await db.get(CatalogItem, item_id)
         if not item:
@@ -260,6 +282,18 @@ async def accept_item(item_id: str, body: dict = None):
             "method": "Record accepted as-is by analyst",
         }
         item.provenance = prov
+
+        # Also resolve any pending validation queue entries for this item
+        await db.execute(
+            update(ValidationItem)
+            .where(ValidationItem.item_id == item.id, ValidationItem.status == "pending")
+            .values(
+                status="approved",
+                resolved_by="analyst",
+                resolved_at=datetime.now(timezone.utc),
+                reviewer_note="Accepted with full record approval",
+            )
+        )
         await db.commit()
         return _serialize_item(item)
 
