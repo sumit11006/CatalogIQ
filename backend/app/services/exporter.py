@@ -34,6 +34,7 @@ def build_delivery_row(item: CatalogItem) -> dict[str, str]:
         row[col] = str(val)
 
     # raw passthrough
+    put("PART_NUMBER", item.mfg_part_number)
     put("Mfg_Part_Num", item.mfg_part_number)
     put("Part_Desc", item.part_desc_raw)
     put("E1_Brand", item.e1_brand_raw)
@@ -45,7 +46,7 @@ def build_delivery_row(item: CatalogItem) -> dict[str, str]:
     put("MANUFACTURER_NAME", item.manufacturer_name)
     put("BRAND_NAME", item.brand_name)
     put("TRADE_NAME", item.trade_name)
-    put("MANUFACTURER_PART_NUMBER", item.manufacturer_part_number)
+    put("MANUFACTURER_PART_NUMBER", item.manufacturer_part_number or item.mfg_part_number)
     put("Classpath", item.classpath)
     put("Dept", item.dept)
     put("Class", item.item_class)
@@ -86,6 +87,12 @@ def items_to_csv(items: list[CatalogItem]) -> str:
     return buf.getvalue()
 
 
-def row_completion(row: dict[str, str]) -> float:
+def row_completion(row: dict[str, str], total_cols: int | None = None) -> float:
+    """Calculate completeness percentage against the full 252-column schema."""
+    if total_cols is None:
+        try:
+            total_cols = len(get_delivery_header())
+        except Exception:
+            total_cols = 252
     filled = sum(1 for v in row.values() if v and str(v).strip())
-    return round(filled / len(row) * 100, 1) if row else 0.0
+    return round(filled / total_cols * 100, 1) if total_cols > 0 else 0.0
