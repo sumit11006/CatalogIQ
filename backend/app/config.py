@@ -49,7 +49,7 @@ class Settings(BaseSettings):
         default_factory=lambda: os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_KEY"),
         alias="GEMINI_API_KEY",
     )
-    gemini_model: str = Field(default="gemini-3.1-flash-lite", alias="GEMINI_MODEL")
+    gemini_model: str = Field(default="gemini-2.0-flash", alias="GEMINI_MODEL")
 
     # Alternative LLM Providers
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
