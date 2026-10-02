@@ -19,7 +19,7 @@ services:
       - key: GEMINI_API_KEY
         sync: false          # set manually in Render dashboard — never commit
       - key: GEMINI_MODEL
-        value: gemini-flash-lite-latest
+        value: gemini-2.0-flash
       - key: PYTHON_VERSION
         value: "3.11.9"
       - key: APP_ENV
