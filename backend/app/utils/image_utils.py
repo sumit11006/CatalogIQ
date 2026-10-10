@@ -4,7 +4,7 @@ import io
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter
 
 
 def resize_image(
@@ -116,7 +116,6 @@ def optimize_image_for_ocr(
         img = img.convert("L")
     
     # Increase contrast
-    from PIL import ImageEnhance
     enhancer = ImageEnhance.Contrast(img)
     img = enhancer.enhance(2.0)
     
@@ -132,7 +131,3 @@ def optimize_image_for_ocr(
     out_path = base.parent / f"{base.stem}_ocr_optimized{base.suffix}"
     img.save(out_path)
     return str(out_path)
-
-
-# Need to import ImageFilter
-from PIL import ImageFilter
