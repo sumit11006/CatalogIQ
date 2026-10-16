@@ -1,350 +1,351 @@
-# CatalogIQ
+<div align="center">
 
-> **AI-Powered Product Intelligence & Catalog Enrichment Platform**
->
-> Turn messy, incomplete catalog rows into complete, standardized, commerce-ready product records — with full traceability, quality scoring, and human-in-the-loop validation.
+# 💎 CatalogIQ
 
-**Built for UniHack** · FastAPI + React + Google Gemini
+### **Autonomous Industrial Product Intelligence & Catalog Enrichment Platform**
 
----
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111.0-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-18.3.1-61DAFB.svg?logo=react&logoColor=black)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.4.5-3178C6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Google Gemini](https://img.shields.io/badge/Google%20Gemini-2.0%20Flash-4285F4.svg?logo=google&logoColor=white)](https://ai.google.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-3.4.4-38B2AC.svg?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![SQLite](https://img.shields.io/badge/SQLite-aiosqlite-003B57.svg?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Challenge](https://img.shields.io/badge/Built%20for-UniHack%20Challenge-FF6F61.svg)](#-what-catalogiq-solves)
 
-## 🏆 What This Platform Solves
+*Transform cryptic, abbreviated industrial catalog rows into standardized, delivery-ready product records across a 252-column schema — featuring deterministic rules, automated quality scoring, field-level provenance, and human-in-the-loop review.*
 
-Industrial distributors receive product catalogs that look like this:
-
-| Raw Input | The Problem |
-|---|---|
-| `DCB518ASTS06G` / `"DCB518ASTS06G Diablo 1/2"x18" - Sanding Belt 6pc"` | Cryptic part number + abbreviated description |
-| `E1_Brand: -- Unbranded --` | Brand fields are placeholders, not data |
-| `Part_Manuf: Freud Inc (2435)` | Inconsistent manufacturer naming |
-
-A human content team would manually research each row and write: title, invoice description (≤40 chars, ALL CAPS), mobile description (60–80 chars), long description, marketing copy, extract 5–50 attributes with normalized units, classify it into a taxonomy… **for every single row.**
-
-CatalogIQ automates this entire pipeline. One click turns 1,000 raw rows into delivery-ready records across the **full 252-column output schema**, with every generated field scored for quality and traceable to its source.
-
-### Mapped to the UniHack Expected Outcomes
-
-| Challenge Outcome | How CatalogIQ Delivers |
-|---|---|
-| **Generate structured intelligence from limited inputs** | Batched Gemini AI calls transform 6 sparse columns into classification, brand resolution, 7 description fields, up to 20 features, and 50 attribute triplets per row |
-| **Improve data quality & consistency** | Deterministic rules engine enforces house style: char limits, approved unit abbreviations (`24 in`, never `24in`), decimal→fraction conversion (`50.25 in` → `50-1/4 in`), placeholder stripping, abbreviation expansion (`SS` → Stainless Steel) |
-| **Validate & enrich with traceable outputs** | Every field stores provenance — source (`input`/`rule`/`AI`/`human`), method, confidence score, and the AI's reasoning. 11 compliance checks produce a 0–100 quality score per record |
-| **Scale efficiently** | Bounded-concurrency async pipeline (8 rows/AI-call × 3 parallel calls ≈ 24 rows in flight), live progress tracking, cost-controlling row limits |
-| **Human-in-the-loop** | Low-confidence or failed-check fields land in a validation queue; one-click approve writes back to the live record |
+[Key Features](#-key-features) • [Architecture](#-system-architecture) • [Quick Start](#-quick-start) • [API Reference](#-api-reference) • [Deployment](#-deployment-options) • [Content Standards](#-content-standard--rules-engine)
 
 ---
 
-## ⚙️ How It Works
+</div>
+
+## 🏆 What CatalogIQ Solves
+
+Industrial distributors receive millions of messy, unstructured product records from manufacturers that are unsearchable and commerce-unready:
 
 ```
-                        ┌──────────────────────────────┐
-   CSV Upload ────────► │  Parse & Clean               │
-   (or demo button)     │  placeholders stripped,      │
-                        │  manufacturer codes parsed   │
-                        └──────────────┬───────────────┘
-                                       ▼
-                        ┌──────────────────────────────┐
-                        │  AI Enrichment (Gemini)      │
-                        │  batches of 8 rows × 3       │
-                        │  concurrent calls            │
-                        └──┬──────────┬──────────┬────┘
-                           ▼          ▼          ▼
-                    Classification  Description  Attribute
-                    Dept/Class/     Builder      Extractor
-                    Fine/Classpath  5 formats +  label·value·UOM
-                    UNSPSC          marketing    triplets
-                           └──────────┬──────────┘
-                                      ▼
-                        ┌──────────────────────────────┐
-                        │  Rules Engine (post-process) │
-                        │  char limits enforced, UOM   │
-                        │  normalized, decimals→fractions│
-                        └──────────────┬───────────────┘
-                                       ▼
-                          ┌────────────────────────┐
-                          │  Quality Engine        │
-                          │  11 checks → 0-100     │
-                          └───────┬─────────┬──────┘
-                                  │         │
-                     passes ──────┘         └────── fails/low-confidence
-                         ▼                              ▼
-              ┌──────────────────┐         ┌──────────────────────────┐
-              │  Ready to Export │         │  Human Validation Queue  │
-              │                  │         │  approve → write-back +  │
-              │  252-column CSV  │◄────────  provenance = "human"    │
-              └──────────────────┘         └──────────────────────────┘
+Raw Input: "DCB518ASTS06G Diablo 1/2"x18" - Sanding Belt 6pc", E1_Brand: "-- Unbranded --", Part_Manuf: "Freud Inc (2435)"
 ```
 
-### The Two-Layer Design
+### The Problem
+- **Cryptic Part Numbers & Abbreviations**: Missing titles, cryptic trade jargon (`CPLG`, `BRS`, `SS`), and missing units.
+- **Placeholder Leakage**: Brand columns filled with empty placeholders (`-- Unbranded --`, `-- No DIB Brand --`, `None`).
+- **Inconsistent Manufacturer Naming**: Legal suffixes, codes, and capitalization are scrambled (`Freud Inc (2435)` vs `FREUD`).
+- **Multi-Channel Description Demands**: Distributors need specific formats for till invoices (≤40 chars ALL CAPS), mobile apps (60–80 chars), ecommerce PDP titles (≤120 chars), and long marketing copy.
+- **Manual Overhead**: Content teams spend weeks researching spec sheets and hand-formatting 50+ attributes and 252 columns per item.
 
-**Layer 1 — AI (creative, fuzzy):** Gemini handles what requires understanding — detecting that `"Diablo"` is the brand hidden inside a description, classifying a sanding belt into the right taxonomy branch, writing persuasive marketing copy.
+### The CatalogIQ Solution
+CatalogIQ automates this entire pipeline. In one click, **raw supplier records are converted into complete, verified product records** adhering strictly to Unilog content standards and mapped directly into the **252-column delivery schema**.
 
-**Layer 2 — Rules Engine (deterministic, exact):** Post-processing enforces what must be precise — hard character limits, approved unit abbreviations, fraction conversions. The AI drafts; the rules engine guarantees format compliance. If the API key is missing or blocked, Layer 1 falls back to rules-only mode so the platform never breaks.
+---
 
-### Traceability Model
+## 📊 Before vs. After: End-to-End Transformation
 
-Every enriched field carries a provenance record:
+| Dimension | Raw Input | CatalogIQ Enriched Record | Compliance Standard |
+|---|---|---|---|
+| **Product Title** | `DCB518ASTS06G` / `Part_Desc` | **Diablo DCB518ASTS06G 1/2 in x 18 in Sanding Belt 6-Pack** | ≤120 chars, Brand + MPN + Type + Spec |
+| **Invoice Desc** | `""` | `SANDING BELT 1/2X18 6PK` | ≤40 chars, ALL CAPS, word-boundary trim |
+| **Mobile Desc** | `""` | `Diablo 1/2 in x 18 in Sanding Belt, Cubitron II, 6/Pack` | 60–80 chars concise mobile PDP view |
+| **Long Description** | `""` | Full sentence description with normalized dimensions, fractions, and key features | Grammatical sentence with fractions & approved units |
+| **Brand Resolution** | `-- Unbranded --` | **Diablo** *(extracted from text & manufacturer hierarchy)* | Canonical brand name, symbol-aware |
+| **Manufacturer** | `Freud Inc (2435)` | **Freud Inc.** *(Code: `2435` preserved in provenance)* | Legal suffix normalization (Inc, LLC, Ltd) |
+| **Taxonomy** | `None` | `Tools > Power Tool Accessories > Sanding Belts` *(UNSPSC: `31191500`)* | Exact 3-level depth classpath |
+| **Dimensions & UOM** | `1/2"x18"` | `Width: 1/2 in`, `Length: 18 in`, `Quantity: 6 pk` | Approved unit abbreviation + number spacing |
+| **Quality Score** | `0 / 100` | **95.2 / 100** | 11 automated compliance checks |
+| **Traceability** | Untracked | `AI draft + house rule enforcement (Confidence: 96%)` | Field-by-field audit provenance |
 
+---
+
+## ⚙️ System Architecture
+
+CatalogIQ uses a robust **Two-Layer Architecture**: combining creative generative AI for fuzzy understanding with a deterministic rules engine for hard mathematical constraints.
+
+```
+                    ┌──────────────────────────────────────────────┐
+                    │            CSV Upload / Demo Run             │
+                    │   (Mfg_Part_Num, Part_Desc, Brands, Manuf)   │
+                    └──────────────────────┬───────────────────────┘
+                                           │
+                                           ▼
+                    ┌──────────────────────────────────────────────┐
+                    │      Cleansing & Normalization Engine        │
+                    │  • Strips placeholder strings (-- Unbranded) │
+                    │  • Extracts manufacturer legal entity & code │
+                    └──────────────────────┬───────────────────────┘
+                                           │
+                                           ▼
+                    ┌──────────────────────────────────────────────┐
+                    │       Layer 1: AI Enrichment (Gemini)        │
+                    │  • Batched async execution (8 rows/call)     │
+                    │  • Taxonomy classification (3 levels deep)   │
+                    │  • Brand resolution from cryptic context     │
+                    │  • 5-variant description drafting            │
+                    │  • Multi-attribute triplet extraction        │
+                    │  • Offline deterministic fallback engine     │
+                    └──────────────────────┬───────────────────────┘
+                                           │
+                                           ▼
+                    ┌──────────────────────────────────────────────┐
+                    │      Layer 2: Deterministic Rules Engine     │
+                    │  • Invoice char limit (≤40) & CAPS guarantee │
+                    │  • Mobile desc length window (60–80 chars)   │
+                    │  • Approved UOM enforcement (in, ft, mm, K)  │
+                    │  • Decimal-to-fraction converter (50.25→50¼) │
+                    │  • Trade abbreviation expansion (SS→Steel)   │
+                    └──────────────────────┬───────────────────────┘
+                                           │
+                                           ▼
+                    ┌──────────────────────────────────────────────┐
+                    │          Quality & Compliance Engine         │
+                    │  • 11 rigorous content-standard validations  │
+                    │  • Computes 0–100 quality score per record   │
+                    │  • Full provenance tracking (AI/Rule/Human)  │
+                    └──────────────────────┬───────────────────────┘
+                                           │
+                        ┌──────────────────┴──────────────────┐
+                        │                                     │
+           [Score ≥ 80% & High Confidence]       [Score < 80% or Low Confidence]
+                        │                                     │
+                        ▼                                     ▼
+             ┌─────────────────────┐              ┌────────────────────────┐
+             │   Export Ready      │              │ Human-in-the-Loop Queue│
+             │ Exact 252-Col CSV   │◄─────────────┤ Analyst review/approve │
+             └─────────────────────┘              └────────────────────────┘
+```
+
+---
+
+## ✨ Key Features
+
+### 1. Multi-Format Description Builder
+Generates 5 distinct description formats required by distributor ERP and eCommerce platforms from a single raw line:
+- **Product Title**: Concise, searchable PDP title (`<Brand> <MPN> <Item Type> <Differentiators>`, ≤120 chars).
+- **Invoice Description**: Telegraphic, uppercase, word-boundary truncated (≤40 chars, ALL CAPS).
+- **Mobile Description**: Streamlined for smartphone viewport (60–80 chars).
+- **Short Description**: Feature-led summary (≤160 chars).
+- **Long Description**: Comprehensive prose containing dimensions, materials, and quantities.
+- **PDP Marketing Copy**: Persuasive copy designed for product detail pages.
+
+### 2. Strict Content Standard & Unit Normalization
+- **Approved UOM Standards**: Standardizes 27+ measurement families (`in`, `ft`, `mm`, `cm`, `m`, `V`, `A`, `W`, `kW`, `dBA`, `lb`, `kg`, `oz`, `ga`, `qt`, `psi`, `rpm`, `hp`, `°F`, `°C`, `pc`, `pk`, `pr`, `cfm`, `lm`, `K`). Enforces strict spacing (`24 in`, never `24in`).
+- **Decimal-to-Fraction Engine**: Automatically translates decimal manufacturer dimensions to industry-standard fractional inches (`50.25 in` → `50-1/4 in`, `8.5 in` → `8-1/2 in`).
+- **Abbreviation Expansion**: Expands trade shorthand while protecting part model numbers (`SS` → Stainless Steel, `WH` → White, `GALV` → Galvanized, `CPLG` → Coupling).
+
+### 3. Traceability & Field-Level Provenance Audit
+Every single enriched attribute stores an immutable provenance record:
 ```json
 {
+  "product_name": {
+    "source": "ai",
+    "method": "Gemini 2.0 Flash generation",
+    "confidence": 0.94,
+    "reasoning": "Detected Diablo brand, extracted dimensions 1/2 in x 18 in and 6-pack packaging from part description."
+  },
   "invoice_desc": {
     "source": "rule",
     "method": "AI draft + house char-limit/caps enforcement",
-    "confidence": 0.95,
-    "reasoning": "Extracted item type and dimensions from abbreviated description..."
+    "confidence": 0.95
   }
 }
 ```
+When an analyst overrides or approves a field in the HITL queue, provenance updates to `"human"` with reviewer timestamp and notes.
 
-Approve a field through the validation queue and its provenance re-stamps as `"human"` — a complete audit trail from raw input to published value.
+### 4. 11 Automated Quality & Compliance Checks
+Every record is validated against 11 strict content standards:
+1. `TITLE`: Product title present and non-empty.
+2. `TITLE_LEN`: Product title length within ≤120 chars.
+3. `INVOICE`: Invoice description present.
+4. `INV_LIMIT`: Invoice description within ≤40 chars.
+5. `INV_CAPS`: Invoice description strictly uppercase.
+6. `MOBILE_RANGE`: Mobile description within target window (60–80 chars ± 10 chars tolerance).
+7. `LONG`: Long description present and substantive.
+8. `ATTR_COUNT`: At least 3 structured attributes extracted.
+9. `UOM`: 100% of units match the approved abbreviation set.
+10. `CLASSPATH`: Classification hierarchy strictly 3 levels deep (`Dept > Class > Fine`).
+11. `NO_PLACEHOLDER`: Zero placeholder leakage into enriched copy.
+
+### 5. Human-in-the-Loop (HITL) Validation Queue
+Proposals with AI confidence < 65% or failed critical quality checks are routed to the interactive Validation Queue. Analysts can review side-by-side diffs, view the AI's reasoning, and approve or reject proposals with a single click.
+
+### 6. Exact 252-Column Delivery CSV Export
+Exports data conforming column-for-column to the Unilog UniHack delivery format specification (headers, passthrough columns, 20 item feature slots, and 50 attribute triplets).
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
+- **Python 3.11+**
+- **Node.js 18+** & **npm**
+- **Google Gemini API Key** (optional — offline deterministic fallback operates automatically if key is absent)
 
-- Python 3.11+
-- Node.js 18+
-- A Google Gemini API key (free from [Google AI Studio](https://aistudio.google.com/) — optional; the platform runs without it)
-
-### Backend Setup
-
+### 1. Clone the Repository
 ```bash
-cd backend
-python -m venv venv
-venv\Scripts\activate            # Windows
-# source venv/bin/activate       # macOS/Linux
-
-pip install -r requirements-light.txt google-genai
-
-copy .env.example .env           # then add your key:
-# GEMINI_API_KEY=your_key_here
-# GEMINI_MODEL=gemini-flash-lite-latest
-
-uvicorn app.main:app --port 8000 --reload
+git clone https://github.com/sumit11006/CatalogIQ.git
+cd CatalogIQ
 ```
 
-The SQLite database auto-creates at `backend/data/product_intelligence.db` on first start.
-
-### Frontend Setup
-
+### 2. Backend Setup
 ```bash
-cd frontend
+cd backend
+
+# Create and activate virtual environment
+python -m venv venv
+venv\Scripts\activate          # Windows PowerShell
+# source venv/bin/activate     # macOS / Linux
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure environment variables
+copy .env.example .env         # Windows
+# cp .env.example .env         # macOS / Linux
+
+# Set your Gemini API key in .env (Optional):
+# GEMINI_API_KEY=your_gemini_api_key_here
+
+# Start FastAPI server
+uvicorn app.main:app --port 8000 --reload
+```
+*The SQLite database is automatically initialized at `backend/data/product_intelligence.db` on startup.*
+
+### 3. Frontend Setup
+```bash
+cd ../frontend
+
+# Install dependencies
 npm install
+
+# Start Vite development server
 npm run dev
 ```
 
-Open **http://localhost:5173**
+Open **http://localhost:5173** in your browser.
 
-> Prefer ONE URL? Run `npm run build` in `frontend/`, then just start the backend —
-> FastAPI automatically serves the built app at **http://localhost:8000** (SPA fallback included).
-
-### 60-Second Demo
-
-1. Open the dashboard — check the **Gemini Engine** chip says *Live* (green) or *Fallback* (amber)
-2. Go to **Pipeline Runs** → click **"Sample 12 rows"**
-3. Watch progress fill in real time (~15–40s depending on AI mode)
-4. Click **"Open catalog"** on the completed run
-5. Click any row → explore the detail drawer: descriptions tab, attributes tab, **traceability tab** (field-level provenance), quality tab
-6. Visit **Validation Queue** → approve/reject low-confidence proposals
-7. Go to **Export** → preview completion % → download the 252-column CSV
+> **Single-Port Production Mode**: Run `npm run build` inside `frontend/`. FastAPI will automatically serve both the API and the React SPA from **http://localhost:8000**!
 
 ---
 
-## 📖 Using the Platform
+## ⚡ 60-Second Demo Walkthrough
 
-### Pipeline Runs Page
-
-| Control | What It Does |
-|---|---|
-| Drop zone | Upload your catalog CSV (expects `Mfg_Part_Num`, `Part_Desc`, `E1_Brand`, `Unilog_Brand`, `DIB_Brand`, `Part_Manuf`) |
-| Row limit | Cap how many rows process — controls API cost on large files |
-| Sample buttons | Run bundled UniHack dataset rows without uploading anything |
-| Progress bar | Live polling shows rows processed as the AI works through batches |
-
-### Catalog Page
-
-- **Search** across part numbers, brands, titles, raw descriptions
-- **Filter tabs**: all / enriched / needs review / pending / failed
-- Click any row for the detail drawer with four tabs:
-  - **Record** — all description formats side by side with live char counts
-  - **Attributes** — extracted triplets with approved-unit badges
-  - **Traceability** — per-field provenance cards showing source pill (AI/Rule/Input/Human), confidence bar, method, and the AI's reasoning
-  - **Quality** — pass/fail against all 11 content-standard checks plus raw-input comparison
-
-### Validation Queue (HITL)
-
-Items appear here when AI confidence < 65%, when critical quality checks fail, or when the AI itself flags uncertainty. Each card shows current vs. proposed values, confidence, and expandable AI rationale. **Approve** writes the value into the live record and stamps provenance as human-verified; **Reject** dismisses it.
-
-### Export Page
-
-- Select a run (or export everything)
-- Preview per-row completion percentage against all 252 columns
-- Download the CSV in **exact UniHack delivery schema** — column-for-column identical header order, ready for scoring
+1. **Dashboard**: Check the **Gemini Engine** status chip (*Live* in green or *Fallback* in amber).
+2. **Pipeline Runs**: Click **"Sample 12 rows"** or drop an industrial catalog CSV file.
+3. **Live Progress**: Watch batches process in real time with the live polling progress bar.
+4. **Catalog Detail Drawer**: Click any enriched row to explore:
+   - **Record Tab**: All 5 description variants with real-time character counters.
+   - **Attributes Tab**: Extracted triplets with approved UOM badges.
+   - **Traceability Tab**: Field-level provenance cards showing source, confidence, and reasoning.
+   - **Quality Tab**: Pass/fail breakdown across all 11 compliance checks.
+5. **Validation Queue**: Review low-confidence items, inspect the AI rationale, and approve or reject.
+6. **Export**: Preview row completeness percentages and download the **252-column delivery CSV**.
 
 ---
 
 ## 📡 API Reference
 
-Base URL: `http://localhost:8000/api/v1` · Interactive docs at `/docs`
+Interactive OpenAPI documentation is available at **http://localhost:8000/docs**.
 
-| Method | Endpoint | Purpose |
+| Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/runs/upload?limit=N` | Upload catalog CSV, starts enrichment run |
-| `POST` | `/runs/sample?limit=N` | Demo run from bundled dataset |
-| `GET` | `/runs` · `/runs/{id}` | Run list / live progress detail |
-| `GET` | `/items?run_id&q&status&page` | Search/filter enriched catalog |
-| `GET` | `/items/{id}` | Full record + provenance + quality checks |
-| `PATCH` | `/items/{id}` | Manual field override (provenance = human) |
-| `GET` | `/validation/queue?status=` | HITL queue (lowest confidence first) |
-| `POST` | `/validation/{id}/action` | `{action: "approve"\|"reject"}` |
-| `GET` | `/export/csv?run_id=` | Download 252-column delivery CSV |
-| `GET` | `/export/preview?run_id=` | Per-row completion percentages |
-| `GET` | `/analytics` | Dashboard KPIs |
+| `GET` | `/health` | Service health status and version |
+| `GET` | `/api/v1/analytics` | Dashboard KPIs, category distribution, and engine mode |
+| `POST` | `/api/v1/runs/upload?limit=N` | Upload catalog CSV and start enrichment pipeline |
+| `POST` | `/api/v1/runs/sample?limit=N` | Execute demo run from bundled dataset |
+| `GET` | `/api/v1/runs` | List all pipeline runs with summary statistics |
+| `GET` | `/api/v1/runs/{run_id}` | Detailed progress, counts, and status of a run |
+| `GET` | `/api/v1/items?run_id=&q=&status=&page=` | Search, filter, and paginate enriched catalog items |
+| `GET` | `/api/v1/items/{item_id}` | Full product intelligence record with provenance |
+| `PATCH`| `/api/v1/items/{item_id}` | Manual field override (stamps provenance as human) |
+| `POST` | `/api/v1/items/{item_id}/accept` | Accept record as-is and resolve queue items |
+| `GET` | `/api/v1/validation/queue?status=` | Fetch HITL validation queue |
+| `POST` | `/api/v1/validation/{id}/action` | Approve or reject proposed field value |
+| `GET` | `/api/v1/export/template` | Retrieve delivery header schema definition |
+| `GET` | `/api/v1/export/preview?run_id=` | Completion percentage preview against 252 columns |
+| `GET` | `/api/v1/export/csv?run_id=` | Download full 252-column delivery CSV |
 
-### Example: End-to-End via API
+---
+
+## 🧪 Testing
+
+CatalogIQ includes a comprehensive test suite verifying API routes, rules engine operations, and export integrity:
 
 ```bash
-# Start a run
-curl -X POST "http://localhost:8000/api/v1/runs/sample?limit=12"
-
-# Check progress
-curl "http://localhost:8000/api/v1/runs/{run_id}"
-
-# Download results
-curl -OJ "http://localhost:8000/api/v1/export/csv?run_id={run_id}"
+cd backend
+pytest -v
 ```
 
 ---
 
-## 🧱 Architecture
+## 🚢 Deployment Options
 
-```
-frontend/           React 18 · TypeScript · Tailwind · TanStack Query
-                    Recharts · Framer Motion · Lucide
-    │
-    ▼  REST (axios)
-backend/app/
-    ├── main.py                 FastAPI app, CORS, gzip, lifespan
-    ├── routers/
-    │   ├── runs.py             upload · sample · progress · items CRUD
-    │   ├── validation.py       HITL queue + approve/reject actions
-    │   ├── export.py           252-column CSV writer + previews
-    │   └── analytics.py        dashboard aggregation
-    ├── services/
-    │   ├── enrichment_ai.py    batched Gemini calls + offline fallback
-    │   ├── rules_engine.py     abbreviations · UOM standards · fractions
-    │   ├── quality_engine.py   11 compliance checks · HITL escalation
-    │   ├── pipeline.py         async orchestrator + provenance capture
-    │   └── exporter.py         exact-schema delivery writer
-    ├── models/catalog.py       PipelineRun · CatalogItem · ValidationItem
-    └── assets/                 delivery template + sample dataset
-    │
-    ▼
-SQLite (async, aiosqlite)      zero-config persistence
+### Option A: Render (Single Service — Recommended)
+FastAPI serves the REST API and the built React frontend from a single container:
+1. Push repository to GitHub.
+2. In [Render Dashboard](https://dashboard.render.com), click **New → Blueprint** and select your repository.
+3. Add `GEMINI_API_KEY` under Environment Variables.
+4. Click **Deploy**. Your demo is live at `https://catalogiq-xxxx.onrender.com`.
+
+### Option B: Docker Container
+```bash
+cd backend
+docker build -t catalogiq-backend .
+docker run -p 8000:8000 -e GEMINI_API_KEY=your_key catalogiq-backend
 ```
 
-### Quality Checks (per record)
-
-Product title present & ≤120 chars · Invoice desc ≤40 chars CAPS · Mobile desc within 60–80 chars · Long description present · ≥3 attributes extracted · All UOMs from approved set · Classpath exactly 3 levels deep · No placeholder leakage
-
-### Graceful Degradation
-
-| Scenario | Behavior |
-|---|---|
-| No API key configured | Rules-based enrichment (abbreviation expansion, template assembly) — lower quality scores but fully functional |
-| API key rate-limited mid-run | Automatic model cascade retry, then per-batch fallback |
-| Key blocked (leaked/reported) | Same as no key — platform stays usable, dashboard shows *Fallback* status |
-
 ---
 
-## 🚢 Free Deployment (for demos)
-
-The whole platform deploys as **one free web service** on [Render](https://render.com) — FastAPI serves both the API and the built React app from a single URL. No CORS setup, no separate frontend hosting.
-
-### Option A — Render (recommended, 1 service)
-
-1. Push this repo to GitHub
-2. Render Dashboard → **New → Blueprint** → select the repo (auto-reads `render.yaml`)
-3. In the service's **Environment** tab, add `GEMINI_API_KEY`
-4. Deploy → your demo lives at `https://catalogiq-xxxx.onrender.com`
-
-`render.yaml` handles everything: installs Python deps, builds the frontend, starts uvicorn on `$PORT`, health check at `/health`.
-
-**Free-tier caveats:**
-- Cold start: first request after ~15 min idle takes ~30–60 s to wake
-- Ephemeral disk: uploaded data resets on redeploys (fine for a live demo — re-upload your CSV or hit "Sample run")
-
-### Option B — Vercel (instant frontend) + Render (backend) + keep-alive
-
-Best of both: **zero UI cold starts** via Vercel, and a free GitHub Action that pings the Render API every 10 minutes so it never sleeps — even mid-demo.
-
-> **Why not the whole app on Vercel?** Vercel serverless functions time out at 10–60s (the enrichment pipeline runs longer batches) and their filesystem is ephemeral, so SQLite can't persist. The frontend is perfect for Vercel; the backend needs a real always-on process.
-
-| Piece | Host | Setting |
-|---|---|---|
-| Frontend | Vercel (free) | root dir `frontend/`, framework: Vite (auto). Edit `frontend/vercel.json` → replace `YOUR-RENDER-APP` with your Render app name — this proxies `/api/*` and `/health` to Render, so no CORS or URL config needed |
-| Backend | Render web service (free) | Blueprint (`render.yaml`) or manual: root dir `backend/`, build `pip install -r requirements.txt`, start `uvicorn app.main:app --host 0.0.0.0 --port $PORT`, env: `GEMINI_API_KEY` |
-| Keep-alive | GitHub Actions (free, included) | `.github/workflows/keep-alive.yml` already in repo — after your first deploy, add repo secret `BACKEND_URL = https://<your-render-app>.onrender.com`. It pings `/health` every 10 min |
-
-**Setup order:** deploy backend on Render first → copy its URL → set it in `frontend/vercel.json` → push → import frontend on Vercel → add `BACKEND_URL` secret on GitHub → done. Demo loads instantly from Vercel's CDN; the API stays warm around the clock.
-
-> ⚠️ Never put your Gemini key in the repo — set it in the host's environment variables.
-
----
-
-## 📱 Mobile & Tablets
-
-The UI is fully responsive:
-- **< 1024px**: hamburger menu with animated slide-in sidebar, sticky top bar
-- Tables scroll horizontally; stat cards reflow (5 → 3 → 2 columns)
-- Item drawer and validation cards go full-width
-- Works on any modern phone browser — open the deployed URL on your phone during the demo
-
----
-
-## 🛠️ Tech Stack
-
-| Layer | Tools |
-|---|---|
-| Frontend | React 18, TypeScript, Vite, Tailwind CSS, TanStack Query v5, Recharts, Framer Motion, Lucide icons |
-| Backend | FastAPI, Pydantic v2, SQLAlchemy 2 (async), aiosqlite, structlog |
-| AI | Google Gemini (`google-genai` SDK) with multi-model cascade fallback |
-| Storage | SQLite (zero-config, file-based) |
-
----
-
-## 📁 Project Layout
+## 📁 Repository Structure
 
 ```
-catalog-iq/
+CatalogIQ/
 ├── backend/
 │   ├── app/
-│   │   ├── models/catalog.py       # data models
-│   │   ├── routers/                # REST endpoints
-│   │   ├── services/               # AI, rules, quality, pipeline, export
-│   │   ├── assets/                 # delivery schema template + sample CSV
-│   │   └── config.py               # env-driven settings
-│   ├── data/                       # auto-created SQLite DB
-│   └── .env                        # GEMINI_API_KEY (never commit)
+│   │   ├── assets/                 # Delivery template CSV & sample dataset
+│   │   ├── models/catalog.py       # SQLAlchemy ORM models (PipelineRun, CatalogItem, ValidationItem)
+│   │   ├── routers/                # REST API routes (runs, items, validation, export, analytics)
+│   │   ├── services/
+│   │   │   ├── enrichment_ai.py    # Batched Gemini AI service & offline fallback
+│   │   │   ├── rules_engine.py     # Deterministic UOM, abbreviation & fraction engine
+│   │   │   ├── quality_engine.py   # 11 compliance checks & HITL routing
+│   │   │   ├── pipeline.py         # Async batch orchestrator & provenance capture
+│   │   │   └── exporter.py         # 252-column delivery CSV writer
+│   │   ├── utils/                  # Structured logger & image utilities
+│   │   ├── config.py               # Pydantic environment configuration
+│   │   ├── database.py             # Async SQLite engine & session management
+│   │   └── main.py                 # FastAPI application & SPA static router
+│   ├── alembic/                    # Database migration scripts
+│   ├── tests/                      # Automated test suite (pytest + httpx)
+│   ├── requirements.txt            # Python dependencies
+│   └── Dockerfile                  # Lightweight backend container configuration
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/                  # Dashboard · Runs · Catalog · Validation · Export
-│   │   ├── components/             # Layout, UI primitives, motion helpers
-│   │   ├── hooks/useCatalog.ts     # React Query hooks w/ live polling
-│   │   └── types/catalog.ts
-│   └── package.json
-├── Resources/                      # UniHack challenge pack
+│   │   ├── api/client.ts           # Axios client with request tracing
+│   │   ├── components/             # Reusable UI primitives, cards, and motion helpers
+│   │   ├── hooks/useCatalog.ts     # TanStack Query hooks with live polling
+│   │   ├── pages/
+│   │   │   ├── DashboardPage.tsx   # KPI cards, charts, and system status
+│   │   │   ├── RunsPage.tsx        # CSV drag-and-drop & pipeline progress
+│   │   │   ├── CatalogPage.tsx     # Filterable catalog table & detail drawer
+│   │   │   ├── ValidationPage.tsx  # HITL review queue with diff viewer
+│   │   │   └── ExportPage.tsx      # Schema preview & 252-col CSV download
+│   │   ├── types/catalog.ts        # TypeScript data definitions
+│   │   └── styles/index.css        # Rose gold & onyx design system
+│   ├── package.json
+│   ├── vite.config.ts
+│   └── tailwind.config.js
+├── Resources/                      # UniHack specification guide & ground-truth data
+├── render.yaml                     # Render.com blueprint deployment configuration
 └── README.md
 ```
 
-## 🔐 Security Notes
-
-- `backend/.env` is gitignored — never commit API keys
-- Google auto-disables keys found in public repos ("reported as leaked"); if you see `403 PERMISSION_DENIED`, generate a fresh key
-- All CORS origins are open for local development only — restrict before deploying
-
 ---
 
-Built with ☕ and rose gold for **UniHack**.
+## 📄 License
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
+<div align="center">
+Built for <b>UniHack</b> • Powered by <b>FastAPI</b>, <b>React</b> & <b>Google Gemini</b>
+</div>
